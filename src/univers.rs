@@ -30,6 +30,7 @@ impl Plugin for UniversPlugin {
                     handle_star_click,
                     animate_orbits,
                     handle_planet_lod,
+                    handle_star_lod.before(spatial_garbage_collector),
                     // --- unused function ---
                     // animate_star_scale,
                 ),
@@ -83,15 +84,23 @@ impl Material2d for GiantStarMaterial {
     }
 }
 
+#[derive(Component)]
+pub struct GiantStar {
+    pub mat_lourd: Handle<GiantStarMaterial>,
+    pub mat_leger: Handle<StarMaterial>,
+    pub est_lourd: bool,
+}
+
 #[derive(Resource)]
 pub struct StarAssets {
     pub mesh_base: Handle<Mesh>,
 
-    // Matériaux Géants
-    pub mat_o: Handle<GiantStarMaterial>,
-    pub mat_b: Handle<GiantStarMaterial>,
+    pub mat_o_heavy: Handle<GiantStarMaterial>,
+    pub mat_b_heavy: Handle<GiantStarMaterial>,
 
-    // Matériaux Standards
+    pub mat_o_light: Handle<StarMaterial>,
+    pub mat_b_light: Handle<StarMaterial>,
+
     pub mat_a: Handle<StarMaterial>,
     pub mat_f: Handle<StarMaterial>,
     pub mat_g: Handle<StarMaterial>,
@@ -133,15 +142,23 @@ fn initialize_star_assets(
     commands.insert_resource(StarAssets {
         mesh_base: meshes.add(Circle::new(1.0)),
 
-        // Initialization of the giants
-        mat_o: materials_giant.add(GiantStarMaterial {
+        // Initialisation des géantes (Lourdes)
+        mat_o_heavy: materials_giant.add(GiantStarMaterial {
             base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_b: materials_giant.add(GiantStarMaterial {
+        mat_b_heavy: materials_giant.add(GiantStarMaterial {
             base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
         }),
 
-        // Initialization of standards
+        // Initialisation des géantes (Légères - Leurs couleurs sont identiques)
+        mat_o_light: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
+        }),
+        mat_b_light: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
+        }),
+
+        // Initialisation des standards
         mat_a: materials_standard.add(StarMaterial {
             base_color: LinearRgba::new(1.0 * hdr, 1.0 * hdr, 1.0 * hdr, 1.0),
         }),
@@ -217,22 +234,34 @@ fn generate_dynamic_universe(
                 let entite = match systeme_stellaire.classe {
                     crate::astrophysique::SpectralClass::O
                     | crate::astrophysique::SpectralClass::B => {
-                        let material =
+                        let (mat_lourd, mat_leger) =
                             if systeme_stellaire.classe == crate::astrophysique::SpectralClass::O {
-                                star_assets.mat_o.clone()
+                                (
+                                    star_assets.mat_o_heavy.clone(),
+                                    star_assets.mat_o_light.clone(),
+                                )
                             } else {
-                                star_assets.mat_b.clone()
+                                (
+                                    star_assets.mat_b_heavy.clone(),
+                                    star_assets.mat_b_light.clone(),
+                                )
                             };
+
                         commands
                             .spawn((
                                 MaterialMesh2dBundle {
                                     mesh,
-                                    material,
+                                    material: mat_lourd.clone(),
                                     transform,
                                     ..default()
                                 },
                                 composant_etoile,
                                 systeme_stellaire,
+                                GiantStar {
+                                    mat_lourd,
+                                    mat_leger,
+                                    est_lourd: true,
+                                },
                             ))
                             .id()
                     }
@@ -264,6 +293,34 @@ fn generate_dynamic_universe(
             }
 
             secteurs_charges.0.insert((x, y), entite_etoile);
+        }
+    }
+}
+
+fn handle_star_lod(
+    mut commands: Commands,
+    requete_camera: Query<&Transform, (With<MainCamera>, Changed<Transform>)>,
+    mut requete_etoiles_geantes: Query<(Entity, &mut GiantStar)>,
+) {
+    if let Ok(camera_transform) = requete_camera.get_single() {
+        let zoom = camera_transform.scale.x;
+        let seuil_lod = 4.0;
+
+        let veut_lourd = zoom <= seuil_lod;
+
+        for (entite, mut geante) in requete_etoiles_geantes.iter_mut() {
+            if geante.est_lourd != veut_lourd {
+                if let Some(mut cmd) = commands.get_entity(entite) {
+                    if veut_lourd {
+                        cmd.remove::<Handle<StarMaterial>>()
+                            .insert(geante.mat_lourd.clone());
+                    } else {
+                        cmd.remove::<Handle<GiantStarMaterial>>()
+                            .insert(geante.mat_leger.clone());
+                    }
+                    geante.est_lourd = veut_lourd;
+                }
+            }
         }
     }
 }
