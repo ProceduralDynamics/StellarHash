@@ -17,7 +17,10 @@ impl Plugin for UniversPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(GlobalSeed(42))
             .init_resource::<LoadedSectors>()
-            .add_plugins(Material2dPlugin::<StarMaterial>::default())
+            .add_plugins((
+                Material2dPlugin::<StarMaterial>::default(),
+                Material2dPlugin::<GiantStarMaterial>::default(),
+            ))
             .add_systems(Startup, initialize_star_assets)
             .add_systems(
                 Update,
@@ -27,6 +30,7 @@ impl Plugin for UniversPlugin {
                     handle_star_click,
                     animate_orbits,
                     handle_planet_lod,
+                    handle_star_lod.before(spatial_garbage_collector),
                     // --- unused function ---
                     // animate_star_scale,
                 ),
@@ -68,11 +72,35 @@ impl Material2d for StarMaterial {
     }
 }
 
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct GiantStarMaterial {
+    #[uniform(0)]
+    pub base_color: LinearRgba,
+}
+
+impl Material2d for GiantStarMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/plasma.wgsl".into()
+    }
+}
+
+#[derive(Component)]
+pub struct GiantStar {
+    pub mat_lourd: Handle<GiantStarMaterial>,
+    pub mat_leger: Handle<StarMaterial>,
+    pub est_lourd: bool,
+}
+
 #[derive(Resource)]
 pub struct StarAssets {
     pub mesh_base: Handle<Mesh>,
-    pub mat_o: Handle<StarMaterial>,
-    pub mat_b: Handle<StarMaterial>,
+
+    pub mat_o_heavy: Handle<GiantStarMaterial>,
+    pub mat_b_heavy: Handle<GiantStarMaterial>,
+
+    pub mat_o_light: Handle<StarMaterial>,
+    pub mat_b_light: Handle<StarMaterial>,
+
     pub mat_a: Handle<StarMaterial>,
     pub mat_f: Handle<StarMaterial>,
     pub mat_g: Handle<StarMaterial>,
@@ -106,33 +134,45 @@ pub fn animate_star_scale(
 fn initialize_star_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StarMaterial>>,
+    mut materials_standard: ResMut<Assets<StarMaterial>>,
+    mut materials_giant: ResMut<Assets<GiantStarMaterial>>,
 ) {
     let hdr = 15.0;
 
     commands.insert_resource(StarAssets {
         mesh_base: meshes.add(Circle::new(1.0)),
 
-        mat_o: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(0.3 * hdr, 0.5 * hdr, 1.0 * hdr)),
+        // Initialisation des géantes (Lourdes)
+        mat_o_heavy: materials_giant.add(GiantStarMaterial {
+            base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_b: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(0.6 * hdr, 0.8 * hdr, 1.0 * hdr)),
+        mat_b_heavy: materials_giant.add(GiantStarMaterial {
+            base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_a: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(1.0 * hdr, 1.0 * hdr, 1.0 * hdr)),
+
+        // Initialisation des géantes (Légères - Leurs couleurs sont identiques)
+        mat_o_light: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_f: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(1.0 * hdr, 1.0 * hdr, 0.8 * hdr)),
+        mat_b_light: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_g: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(1.0 * hdr, 0.9 * hdr, 0.2 * hdr)),
+
+        // Initialisation des standards
+        mat_a: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(1.0 * hdr, 1.0 * hdr, 1.0 * hdr, 1.0),
         }),
-        mat_k: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(1.0 * hdr, 0.5 * hdr, 0.1 * hdr)),
+        mat_f: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(1.0 * hdr, 1.0 * hdr, 0.8 * hdr, 1.0),
         }),
-        mat_m: materials.add(StarMaterial {
-            base_color: LinearRgba::from(Color::srgb(0.9 * hdr, 0.2 * hdr, 0.2 * hdr)),
+        mat_g: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(1.0 * hdr, 0.9 * hdr, 0.2 * hdr, 1.0),
+        }),
+        mat_k: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(1.0 * hdr, 0.5 * hdr, 0.1 * hdr, 1.0),
+        }),
+        mat_m: materials_standard.add(StarMaterial {
+            base_color: LinearRgba::new(0.9 * hdr, 0.2 * hdr, 0.2 * hdr, 1.0),
         }),
     });
 }
@@ -171,49 +211,116 @@ fn generate_dynamic_universe(
             }
 
             let probabilite = generation::calculate_spatial_hash(x, y, graine.0);
-
             let mut entite_etoile = None;
 
             if probabilite > 0.95 {
                 let systeme_stellaire =
                     crate::astrophysique::generate_characteristics(x, y, probabilite);
 
-                let handle_materiau = match systeme_stellaire.classe {
-                    crate::astrophysique::SpectralClass::O => star_assets.mat_o.clone(),
-                    crate::astrophysique::SpectralClass::B => star_assets.mat_b.clone(),
-                    crate::astrophysique::SpectralClass::A => star_assets.mat_a.clone(),
-                    crate::astrophysique::SpectralClass::F => star_assets.mat_f.clone(),
-                    crate::astrophysique::SpectralClass::G => star_assets.mat_g.clone(),
-                    crate::astrophysique::SpectralClass::K => star_assets.mat_k.clone(),
-                    crate::astrophysique::SpectralClass::M => star_assets.mat_m.clone(),
-                };
-
                 let taille_visuelle = 8.0 + (systeme_stellaire.rayon_solaire * 4.0);
                 let rayon_final = taille_visuelle / 2.0;
 
-                let entite = commands
-                    .spawn((
-                        MaterialMesh2dBundle {
-                            mesh: Mesh2dHandle(star_assets.mesh_base.clone()),
-                            material: handle_materiau,
-                            transform: Transform::from_xyz(
-                                x as f32 * taille_secteur,
-                                y as f32 * taille_secteur,
-                                0.0,
-                            )
-                            .with_scale(Vec3::splat(rayon_final)),
-                            ..default()
-                        },
-                        Star {
-                            grille_x: x,
-                            grille_y: y,
-                        },
-                        systeme_stellaire,
-                    ))
-                    .id();
+                let transform =
+                    Transform::from_xyz(x as f32 * taille_secteur, y as f32 * taille_secteur, 0.0)
+                        .with_scale(Vec3::splat(rayon_final));
+
+                let mesh = Mesh2dHandle(star_assets.mesh_base.clone());
+                let composant_etoile = Star {
+                    grille_x: x,
+                    grille_y: y,
+                };
+
+                // Routing based on material type
+                let entite = match systeme_stellaire.classe {
+                    crate::astrophysique::SpectralClass::O
+                    | crate::astrophysique::SpectralClass::B => {
+                        let (mat_lourd, mat_leger) =
+                            if systeme_stellaire.classe == crate::astrophysique::SpectralClass::O {
+                                (
+                                    star_assets.mat_o_heavy.clone(),
+                                    star_assets.mat_o_light.clone(),
+                                )
+                            } else {
+                                (
+                                    star_assets.mat_b_heavy.clone(),
+                                    star_assets.mat_b_light.clone(),
+                                )
+                            };
+
+                        commands
+                            .spawn((
+                                MaterialMesh2dBundle {
+                                    mesh,
+                                    material: mat_lourd.clone(),
+                                    transform,
+                                    ..default()
+                                },
+                                composant_etoile,
+                                systeme_stellaire,
+                                GiantStar {
+                                    mat_lourd,
+                                    mat_leger,
+                                    est_lourd: true,
+                                },
+                            ))
+                            .id()
+                    }
+                    _ => {
+                        let material = match systeme_stellaire.classe {
+                            crate::astrophysique::SpectralClass::A => star_assets.mat_a.clone(),
+                            crate::astrophysique::SpectralClass::F => star_assets.mat_f.clone(),
+                            crate::astrophysique::SpectralClass::G => star_assets.mat_g.clone(),
+                            crate::astrophysique::SpectralClass::K => star_assets.mat_k.clone(),
+                            crate::astrophysique::SpectralClass::M => star_assets.mat_m.clone(),
+                            _ => unreachable!(),
+                        };
+                        commands
+                            .spawn((
+                                MaterialMesh2dBundle {
+                                    mesh,
+                                    material,
+                                    transform,
+                                    ..default()
+                                },
+                                composant_etoile,
+                                systeme_stellaire,
+                            ))
+                            .id()
+                    }
+                };
+
                 entite_etoile = Some(entite);
             }
+
             secteurs_charges.0.insert((x, y), entite_etoile);
+        }
+    }
+}
+
+fn handle_star_lod(
+    mut commands: Commands,
+    requete_camera: Query<&Transform, (With<MainCamera>, Changed<Transform>)>,
+    mut requete_etoiles_geantes: Query<(Entity, &mut GiantStar)>,
+) {
+    if let Ok(camera_transform) = requete_camera.get_single() {
+        let zoom = camera_transform.scale.x;
+        let seuil_lod = 4.0;
+
+        let veut_lourd = zoom <= seuil_lod;
+
+        for (entite, mut geante) in requete_etoiles_geantes.iter_mut() {
+            if geante.est_lourd != veut_lourd {
+                if let Some(mut cmd) = commands.get_entity(entite) {
+                    if veut_lourd {
+                        cmd.remove::<Handle<StarMaterial>>()
+                            .insert(geante.mat_lourd.clone());
+                    } else {
+                        cmd.remove::<Handle<GiantStarMaterial>>()
+                            .insert(geante.mat_leger.clone());
+                    }
+                    geante.est_lourd = veut_lourd;
+                }
+            }
         }
     }
 }
@@ -389,7 +496,6 @@ fn handle_star_click(
                         commands.entity(entite).remove::<ExpandedSystem>();
                         commands.entity(entite).despawn_descendants();
                     }
-
                     break;
                 }
             }
@@ -425,6 +531,7 @@ mod tests {
         app.init_asset::<Mesh>();
         app.init_asset::<ColorMaterial>();
         app.init_asset::<StarMaterial>();
+        app.init_asset::<GiantStarMaterial>();
 
         app.insert_resource(GlobalSeed(42));
         app.init_resource::<LoadedSectors>();
@@ -483,10 +590,7 @@ mod tests {
         assert!(app.world().resource::<LoadedSectors>().0.is_empty());
         app.update();
         let secteurs = app.world().resource::<LoadedSectors>();
-        assert!(
-            !secteurs.0.is_empty(),
-            "The sectors around the camera should have been generated."
-        );
+        assert!(!secteurs.0.is_empty());
     }
 
     #[test]
@@ -569,10 +673,7 @@ mod tests {
 
         let secteurs_apres = app.world().resource::<LoadedSectors>();
         assert!(secteurs_apres.0.contains_key(&(2, 2)));
-        assert!(
-            !secteurs_apres.0.contains_key(&(50, 50)),
-            "The distant sector should have been removed from memory."
-        );
+        assert!(!secteurs_apres.0.contains_key(&(50, 50)));
     }
 
     #[test]

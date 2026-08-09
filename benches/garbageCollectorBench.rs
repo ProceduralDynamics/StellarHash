@@ -13,7 +13,7 @@ fn prepare_world_overload() -> App {
     app.init_resource::<LoadedSectors>();
 
     app.world_mut()
-        .spawn((Transform::from_xyz(0.0, 0.0, 0.0), MainCamera));
+        .spawn((Transform::from_xyz(5000.0, 0.0, 0.0), MainCamera));
 
     for x in -50..50 {
         for y in -50..50 {
@@ -34,14 +34,6 @@ fn prepare_world_overload() -> App {
 
     app.add_systems(Update, spatial_garbage_collector);
 
-    app.update();
-
-    let mut requete = app
-        .world_mut()
-        .query_filtered::<&mut Transform, With<MainCamera>>();
-    let mut camera_transform = requete.single_mut(app.world_mut());
-    camera_transform.translation.x += 100.0;
-
     app
 }
 
@@ -50,8 +42,11 @@ fn bench_garbage_collector(c: &mut Criterion) {
         b.iter_batched_ref(
             || prepare_world_overload(),
             |app| {
+                // Measured step: Launch 1 frame.
+                // The engine will detect the 10,000 distant entities, destroy them, and filter the HashSet.
                 app.update();
             },
+            // Tells Criterion that the preparation requires a lot of RAM.
             BatchSize::LargeInput,
         )
     });
