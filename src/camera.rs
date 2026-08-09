@@ -1,6 +1,7 @@
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 // The plugin that encapsulates all camera logicpub struct CameraPlugin;
 pub struct CameraPlugin;
@@ -64,19 +65,31 @@ fn move_camera(
 fn zoom_camera(
     mut evenements_molette: EventReader<MouseWheel>,
     mut requete_camera: Query<&mut Transform, With<MainCamera>>,
+    requete_fenetre: Query<&Window, With<PrimaryWindow>>,
 ) {
     let mut transform = requete_camera.single_mut();
+
+    let mut zoom_max = 15.0;
+
+    if let Ok(fenetre) = requete_fenetre.get_single() {
+        let dimension_max = fenetre.width().max(fenetre.height());
+
+        let distance_max_monde = 100.0 * 80.0;
+
+        zoom_max = (distance_max_monde / (dimension_max / 2.0)) * 0.95;
+    }
     for evenement in evenements_molette.read() {
         let facteur_zoom = 1.1;
         let mut nouvelle_echelle = transform.scale.x;
 
         if evenement.y > 0.0 {
-            nouvelle_echelle /= facteur_zoom;
+            nouvelle_echelle /= facteur_zoom; // Zoom in
         } else if evenement.y < 0.0 {
-            nouvelle_echelle *= facteur_zoom;
+            nouvelle_echelle *= facteur_zoom; // Zoom out
         }
 
-        nouvelle_echelle = nouvelle_echelle.clamp(0.1, 50.0);
+        nouvelle_echelle = nouvelle_echelle.clamp(0.1, zoom_max);
+
         transform.scale = Vec3::splat(nouvelle_echelle);
     }
 }
