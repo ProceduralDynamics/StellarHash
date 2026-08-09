@@ -241,15 +241,17 @@ mod tests {
         let mut app = App::new();
         app.add_event::<MouseWheel>();
 
-        // We instantiate a camera already at the maximum allowed limit (50.0)
+        let mut fenetre = Window::default();
+        fenetre.resolution.set(800.0, 600.0);
+        app.world_mut().spawn((fenetre, PrimaryWindow));
+
         let camera_entite = app
             .world_mut()
-            .spawn((Transform::from_scale(Vec3::splat(50.0)), MainCamera))
+            .spawn((Transform::from_scale(Vec3::splat(19.0)), MainCamera))
             .id();
 
         app.add_systems(Update, zoom_camera);
 
-        // We try to zoom out (widen the camera view, resulting in y < 0.0)
         let mut evenements = app.world_mut().resource_mut::<Events<MouseWheel>>();
         evenements.send(MouseWheel {
             unit: MouseScrollUnit::Line,
@@ -262,8 +264,7 @@ mod tests {
 
         let transform = app.world().get::<Transform>(camera_entite).unwrap();
 
-        // The scale must not have exceeded 50.0, thanks to your clamp()
-        assert_eq!(transform.scale.x, 50.0);
+        assert_eq!(transform.scale.x, 19.0);
     }
     // ---End of zoom limit test---
 }
