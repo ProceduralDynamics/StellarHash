@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 use crate::astrophysique::StellarSystem;
 use crate::camera::MainCamera;
+use crate::univers::GlobalSeed;
 use crate::univers::Star;
 
 const ANECDOTE_FILE: &str = include_str!("../assets/anecdotes.txt");
@@ -22,6 +23,7 @@ impl Plugin for UiPlugin {
                 Startup,
                 (
                     initialize_fps,
+                    initialize_seed_display,
                     initialize_info_panel,
                     initialize_trivia_panel,
                 ),
@@ -71,6 +73,45 @@ fn initialize_fps(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ),
                 TexteFps,
             ));
+        });
+}
+
+fn initialize_seed_display(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    graine: Res<GlobalSeed>,
+) {
+    let police = asset_server.load("../fonts/GeistPixel.ttf");
+
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(10.0),
+                left: Val::Px(10.0),
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_sections([
+                TextSection::new(
+                    "Seed: ",
+                    TextStyle {
+                        font: police.clone(),
+                        font_size: 24.0,
+                        color: Color::WHITE,
+                    },
+                ),
+                TextSection::new(
+                    graine.0.to_string(),
+                    TextStyle {
+                        font: police,
+                        font_size: 24.0,
+                        color: Color::srgba(0.4, 0.8, 1.0, 1.0),
+                    },
+                ),
+            ]));
         });
 }
 
