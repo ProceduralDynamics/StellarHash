@@ -76,6 +76,8 @@ impl Material2d for StarMaterial {
 pub struct GiantStarMaterial {
     #[uniform(0)]
     pub base_color: LinearRgba,
+    #[uniform(0)]
+    pub seed: f32,
 }
 
 impl Material2d for GiantStarMaterial {
@@ -94,9 +96,6 @@ pub struct GiantStar {
 #[derive(Resource)]
 pub struct StarAssets {
     pub mesh_base: Handle<Mesh>,
-
-    pub mat_o_heavy: Handle<GiantStarMaterial>,
-    pub mat_b_heavy: Handle<GiantStarMaterial>,
 
     pub mat_o_light: Handle<StarMaterial>,
     pub mat_b_light: Handle<StarMaterial>,
@@ -135,22 +134,13 @@ fn initialize_star_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials_standard: ResMut<Assets<StarMaterial>>,
-    mut materials_giant: ResMut<Assets<GiantStarMaterial>>,
 ) {
     let hdr = 15.0;
 
     commands.insert_resource(StarAssets {
         mesh_base: meshes.add(Circle::new(1.0)),
 
-        // Initialisation des géantes (Lourdes)
-        mat_o_heavy: materials_giant.add(GiantStarMaterial {
-            base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
-        }),
-        mat_b_heavy: materials_giant.add(GiantStarMaterial {
-            base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
-        }),
-
-        // Initialisation des géantes (Légères - Leurs couleurs sont identiques)
+        // Initialization of the giants (Light – their colors are identical)
         mat_o_light: materials_standard.add(StarMaterial {
             base_color: LinearRgba::new(0.3 * hdr, 0.5 * hdr, 1.0 * hdr, 1.0),
         }),
@@ -158,7 +148,7 @@ fn initialize_star_assets(
             base_color: LinearRgba::new(0.6 * hdr, 0.8 * hdr, 1.0 * hdr, 1.0),
         }),
 
-        // Initialisation des standards
+        // Initialization of standards
         mat_a: materials_standard.add(StarMaterial {
             base_color: LinearRgba::new(1.0 * hdr, 1.0 * hdr, 1.0 * hdr, 1.0),
         }),
@@ -183,6 +173,7 @@ fn generate_dynamic_universe(
     graine: Res<GlobalSeed>,
     mut secteurs_charges: ResMut<LoadedSectors>,
     star_assets: Res<StarAssets>,
+    mut materials_giant: ResMut<Assets<GiantStarMaterial>>,
     mut derniere_pos_maj: Local<Vec2>,
     mut dernier_zoom_maj: Local<f32>,
 ) {
@@ -234,15 +225,37 @@ fn generate_dynamic_universe(
                 let entite = match systeme_stellaire.classe {
                     crate::astrophysique::SpectralClass::O
                     | crate::astrophysique::SpectralClass::B => {
+                        let hdr = 15.0;
+
+                        // SEED GENERATION: Unique to this precise stellar coordinate
+                        let seed_etoile = (x as f32) * 0.1337 + (y as f32) * 0.7331;
+
+                        // Creating the unique heavy material on the fly
                         let (mat_lourd, mat_leger) =
                             if systeme_stellaire.classe == crate::astrophysique::SpectralClass::O {
                                 (
-                                    star_assets.mat_o_heavy.clone(),
+                                    materials_giant.add(GiantStarMaterial {
+                                        base_color: LinearRgba::new(
+                                            0.3 * hdr,
+                                            0.5 * hdr,
+                                            1.0 * hdr,
+                                            1.0,
+                                        ),
+                                        seed: seed_etoile,
+                                    }),
                                     star_assets.mat_o_light.clone(),
                                 )
                             } else {
                                 (
-                                    star_assets.mat_b_heavy.clone(),
+                                    materials_giant.add(GiantStarMaterial {
+                                        base_color: LinearRgba::new(
+                                            0.6 * hdr,
+                                            0.8 * hdr,
+                                            1.0 * hdr,
+                                            1.0,
+                                        ),
+                                        seed: seed_etoile,
+                                    }),
                                     star_assets.mat_b_light.clone(),
                                 )
                             };
