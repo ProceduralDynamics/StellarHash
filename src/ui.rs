@@ -155,7 +155,7 @@ fn initialize_info_panel(mut commands: Commands, asset_server: Res<AssetServer>)
                     "Stellar Data",
                     TextStyle {
                         font: police,
-                        font_size: 18.0,
+                        font_size: 24.0,
                         color: Color::WHITE,
                     },
                 ),
@@ -273,7 +273,7 @@ fn initialize_trivia_panel(mut commands: Commands, asset_server: Res<AssetServer
                     texte_initial,
                     TextStyle {
                         font: police,
-                        font_size: 16.0,
+                        font_size: 24.0,
                         color: Color::WHITE,
                     },
                 ),
@@ -482,7 +482,7 @@ mod tests {
         assert_eq!(texte.sections[0].value, "Stellar Data");
 
         // Check the text style (size and color)
-        assert_eq!(texte.sections[0].style.font_size, 18.0);
+        assert_eq!(texte.sections[0].style.font_size, 24.0);
         assert_eq!(texte.sections[0].style.color, Color::WHITE);
     }
 }
