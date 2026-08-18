@@ -28,6 +28,36 @@ pub fn calculate_spatial_hash(x: i32, y: i32, graine: u32) -> f32 {
     (hash as f32) / (std::u32::MAX as f32)
 }
 
+// Generates continuous value noise between 0.0 and 1.0.
+// Allows for the deterministic creation of dense and empty zones.
+pub fn get_macro_density(x: i32, y: i32, graine: u32) -> f32 {
+    let echelle = 5; // Size of a "galactic cluster" in number of cells
+
+    // Define the macro-grid coordinates
+    let macro_x = x.div_euclid(echelle);
+    let macro_y = y.div_euclid(echelle);
+
+    // Define the fractional position within the macro-cell
+    let frac_x = (x.rem_euclid(echelle) as f32) / (echelle as f32);
+    let frac_y = (y.rem_euclid(echelle) as f32) / (echelle as f32);
+
+    // Interpolation smoothing (Smoothstep) for an organic look
+    let u = frac_x * frac_x * (3.0 - 2.0 * frac_x);
+    let v = frac_y * frac_y * (3.0 - 2.0 * frac_y);
+
+    // Hashing the 4 corners of the current macro-cell
+    let h00 = calculate_spatial_hash(macro_x, macro_y, graine);
+    let h10 = calculate_spatial_hash(macro_x + 1, macro_y, graine);
+    let h01 = calculate_spatial_hash(macro_x, macro_y + 1, graine);
+    let h11 = calculate_spatial_hash(macro_x + 1, macro_y + 1, graine);
+
+    // Bilinear interpolation between the 4 corners
+    let nx0 = h00 * (1.0 - u) + h10 * u;
+    let nx1 = h01 * (1.0 - u) + h11 * u;
+
+    nx0 * (1.0 - v) + nx1 * v
+}
+
 // --- START UNIT TESTS ---
 mod tests {
     use super::*;
