@@ -204,14 +204,13 @@ fn generate_dynamic_universe(
             // the probability density map of base occurrence.
             let densite_brute = generation::get_macro_density(x, y, graine.0.wrapping_add(999));
 
-            let densite_contrastee = ((densite_brute - 0.5) * 2.5) + 0.5;
+            let densite_contrastee = ((densite_brute - 0.5) * 2.0) + 0.5;
             let densite_contrastee = densite_contrastee.clamp(0.0, 1.0);
 
-            // The threshold becomes dynamic.
-            // - If density = 1.0 -> the threshold is 0.85 (Star cluster: frequent appearance)
-            // - If density = 0.0 -> the threshold is 0.99 (Space void: very rare appearance)
-            let seuil_apparition = 1.05 - (densite_contrastee * 0.30);
+            let densite_lissee =
+                densite_contrastee * densite_contrastee * (3.0 - 2.0 * densite_contrastee);
 
+            let seuil_apparition = 1.05 - (densite_lissee * 0.25);
             let probabilite = generation::calculate_spatial_hash(x, y, graine.0);
             let mut entite_etoile = None;
 
