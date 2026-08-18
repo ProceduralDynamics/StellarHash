@@ -201,19 +201,40 @@ fn generate_dynamic_universe(
                 continue;
             }
 
+            // the probability density map of base occurrence.
+            let densite_brute = generation::get_macro_density(x, y, graine.0.wrapping_add(999));
+
+            let densite_contrastee = ((densite_brute - 0.5) * 2.0) + 0.5;
+            let densite_contrastee = densite_contrastee.clamp(0.0, 1.0);
+
+            let densite_lissee =
+                densite_contrastee * densite_contrastee * (3.0 - 2.0 * densite_contrastee);
+
+            let seuil_apparition = 1.05 - (densite_lissee * 0.25);
             let probabilite = generation::calculate_spatial_hash(x, y, graine.0);
             let mut entite_etoile = None;
 
-            if probabilite > 0.95 {
+            if probabilite > seuil_apparition {
                 let systeme_stellaire =
                     crate::astrophysique::generate_characteristics(x, y, probabilite);
 
                 let taille_visuelle = 8.0 + (systeme_stellaire.rayon_solaire * 4.0);
                 let rayon_final = taille_visuelle / 2.0;
 
+                // Local offset
+                let proba_offset_x =
+                    generation::calculate_spatial_hash(x, y, graine.0.wrapping_add(1234));
+                let proba_offset_y =
+                    generation::calculate_spatial_hash(x, y, graine.0.wrapping_add(5678));
+
+                let offset_x = (proba_offset_x - 0.5) * (taille_secteur * 0.8);
+                let offset_y = (proba_offset_y - 0.5) * (taille_secteur * 0.8);
+
+                let pos_x = (x as f32 * taille_secteur) + offset_x;
+                let pos_y = (y as f32 * taille_secteur) + offset_y;
+
                 let transform =
-                    Transform::from_xyz(x as f32 * taille_secteur, y as f32 * taille_secteur, 0.0)
-                        .with_scale(Vec3::splat(rayon_final));
+                    Transform::from_xyz(pos_x, pos_y, 0.0).with_scale(Vec3::splat(rayon_final));
 
                 let mesh = Mesh2dHandle(star_assets.mesh_base.clone());
                 let composant_etoile = Star {

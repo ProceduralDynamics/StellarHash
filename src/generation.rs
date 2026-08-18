@@ -28,6 +28,41 @@ pub fn calculate_spatial_hash(x: i32, y: i32, graine: u32) -> f32 {
     (hash as f32) / (std::u32::MAX as f32)
 }
 
+// Generates continuous value noise between 0.0 and 1.0.
+// Allows for the deterministic creation of dense and empty zones.
+pub fn get_macro_density(x: i32, y: i32, graine: u32) -> f32 {
+    let forme_globale = get_value_noise(x, y, graine, 40) * 0.60;
+
+    let details_moyens = get_value_noise(x, y, graine.wrapping_add(111), 15) * 0.30;
+
+    let micro_bruit = get_value_noise(x, y, graine.wrapping_add(222), 5) * 0.10;
+
+    // The sum always yields a value between 0.0 and 1.0
+    forme_globale + details_moyens + micro_bruit
+}
+
+/// Scale-configurable Value Noise base function
+fn get_value_noise(x: i32, y: i32, graine: u32, echelle: i32) -> f32 {
+    let macro_x = x.div_euclid(echelle);
+    let macro_y = y.div_euclid(echelle);
+
+    let frac_x = (x.rem_euclid(echelle) as f32) / (echelle as f32);
+    let frac_y = (y.rem_euclid(echelle) as f32) / (echelle as f32);
+
+    let u = frac_x * frac_x * (3.0 - 2.0 * frac_x);
+    let v = frac_y * frac_y * (3.0 - 2.0 * frac_y);
+
+    let h00 = calculate_spatial_hash(macro_x, macro_y, graine);
+    let h10 = calculate_spatial_hash(macro_x + 1, macro_y, graine);
+    let h01 = calculate_spatial_hash(macro_x, macro_y + 1, graine);
+    let h11 = calculate_spatial_hash(macro_x + 1, macro_y + 1, graine);
+
+    let nx0 = h00 * (1.0 - u) + h10 * u;
+    let nx1 = h01 * (1.0 - u) + h11 * u;
+
+    nx0 * (1.0 - v) + nx1 * v
+}
+
 // --- START UNIT TESTS ---
 mod tests {
     use super::*;
