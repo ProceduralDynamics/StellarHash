@@ -15,8 +15,7 @@ pub struct UniversPlugin;
 
 impl Plugin for UniversPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GlobalSeed(42))
-            .init_resource::<LoadedSectors>()
+        app.init_resource::<LoadedSectors>()
             .add_plugins((
                 Material2dPlugin::<StarMaterial>::default(),
                 Material2dPlugin::<GiantStarMaterial>::default(),
