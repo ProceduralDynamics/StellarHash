@@ -5,8 +5,22 @@ use StellarHash::ui;
 use StellarHash::univers;
 
 fn main() {
+    let seed = std::env::args()
+        .nth(1)
+        .and_then(|arg| arg.parse::<u32>().ok())
+        .unwrap_or_else(|| {
+            let random_seed = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .map(|d| d.as_secs() as u32)
+                .unwrap_or(42);
+            random_seed
+        });
+
+    println!("Generation Seed: {}", seed);
+
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.05)))
+        .insert_resource(univers::GlobalSeed(seed))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "StellarHash".to_string(),
